@@ -1,63 +1,107 @@
-import { pgTable, text, serial, integer, boolean, date, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Define document categories enum
-export const DOCUMENT_CATEGORIES = [
-  "lab_results",
-  "prescriptions",
-  "imaging",
-  "surgical",
-  "vaccination",
-  "other"
-] as const;
-
-// Define file types
-export const FILE_TYPES = ["pdf", "jpg", "jpeg", "png"] as const;
-
-// Define the documents table
-export const documents = pgTable("documents", {
-  id: serial("id").primaryKey(),
-  title: text("title").notNull(),
-  category: text("category").notNull().$type<typeof DOCUMENT_CATEGORIES[number]>(),
-  date: text("date").notNull(), // ISO date string
-  fileType: text("fileType").notNull().$type<typeof FILE_TYPES[number]>(),
-  fileData: text("fileData").notNull(), // Base64 encoded file content
-  createdAt: text("createdAt").notNull(), // ISO date string
-});
-
-// Create insert schema for validation
-export const insertDocumentSchema = createInsertSchema(documents)
-  .omit({ id: true })
-  .extend({
-    category: z.enum(DOCUMENT_CATEGORIES),
-    fileType: z.enum(FILE_TYPES),
-    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD format
-  });
-
-// Filter options schema
-export const filterSchema = z.object({
-  category: z.enum([...DOCUMENT_CATEGORIES, ""]).optional(),
-  date: z.enum(["", "last_month", "last_3_months", "last_6_months", "last_year", "custom"]).optional(),
-  search: z.string().optional(),
-});
-
-// Export types
-export type Document = typeof documents.$inferSelect;
-export type InsertDocument = z.infer<typeof insertDocumentSchema>;
-export type DocumentFilter = z.infer<typeof filterSchema>;
-
-// The users table is kept for authentication purposes
+// User schema with role field
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
+  displayName: text("display_name").notNull(),
+  email: text("email"),
+  role: text("role", { enum: ["patient", "doctor"] }).notNull().default("patient"),
+  createdAt: timestamp("created_at").defaultNow().notNull()
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
+export const insertUserSchema = createInsertSchema(users).omit({
+  id: true,
+  createdAt: true
 });
 
-export type InsertUser = z.infer<typeof insertUserSchema>;
+// Categories schema
+export const categories = pgTable("categories", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  userId: integer("user_id").notNull(),
+  count: integer("count").default(0).notNull()
+});
+
+export const insertCategorySchema = createInsertSchema(categories).omit({
+  id: true,
+  count: true
+});
+
+// Documents schema
+export const documents = pgTable("documents", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  categoryId: integer("category_id").notNull(),
+  userId: integer("user_id").notNull(),
+  fileData: jsonb("file_data").notNull(), // Store the file content as JSON
+  date: timestamp("date").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull()
+});
+
+export const insertDocumentSchema = createInsertSchema(documents).omit({
+  id: true,
+  createdAt: true
+});
+
+// QR Code schema
+export const qrCodes = pgTable("qr_codes", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  token: text("token").notNull().unique(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at")
+});
+
+export const insertQrCodeSchema = createInsertSchema(qrCodes).omit({
+  id: true,
+  createdAt: true
+});
+
+// Medical conditions schema
+export const medicalConditions = pgTable("medical_conditions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  summary: text("summary").notNull(),
+  lastUpdated: timestamp("last_updated").defaultNow().notNull()
+});
+
+export const insertMedicalConditionSchema = createInsertSchema(medicalConditions).omit({
+  id: true,
+  lastUpdated: true
+});
+
+// Type definitions
 export type User = typeof users.$inferSelect;
+export type InsertUser = z.infer<typeof insertUserSchema>;
+
+export type MedicalCondition = typeof medicalConditions.$inferSelect;
+export type InsertMedicalCondition = z.infer<typeof insertMedicalConditionSchema>;
+
+export type Category = typeof categories.$inferSelect;
+export type InsertCategory = z.infer<typeof insertCategorySchema>;
+
+export type Document = typeof documents.$inferSelect;
+export type InsertDocument = z.infer<typeof insertDocumentSchema>;
+
+export type QrCode = typeof qrCodes.$inferSelect;
+export type InsertQrCode = z.infer<typeof insertQrCodeSchema>;
+
+// Extend document schema for frontend use with category name
+export const documentWithCategorySchema = z.object({
+  id: z.number(),
+  title: z.string(),
+  categoryId: z.number(),
+  categoryName: z.string(),
+  userId: z.number(),
+  fileData: z.any(),
+  date: z.date(),
+  notes: z.string().optional(),
+  createdAt: z.date()
+});
+
+export type DocumentWithCategory = z.infer<typeof documentWithCategorySchema>;

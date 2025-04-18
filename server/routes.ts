@@ -1,152 +1,245 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertDocumentSchema, filterSchema } from "@shared/schema";
+import { 
+  insertUserSchema, 
+  insertCategorySchema, 
+  insertDocumentSchema, 
+  insertQrCodeSchema
+} from "@shared/schema";
+import { randomBytes } from "crypto";
 import { ZodError } from "zod";
-import { fromZodError } from "zod-validation-error";
-import QRCode from "qrcode";
+import { setupAuth } from "./auth";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // prefix all routes with /api
-  const api = "/api";
+  // Set up authentication
+  setupAuth(app);
+  // Helper function to handle validation errors
+  const handleZodError = (err: unknown, res: Response) => {
+    if (err instanceof ZodError) {
+      return res.status(400).json({ 
+        message: "Validation error", 
+        errors: err.errors 
+      });
+    }
+    
+    console.error("Unexpected error:", err);
+    return res.status(500).json({ 
+      message: "Internal server error" 
+    });
+  };
 
-  // Get all documents
-  app.get(`${api}/documents`, async (req, res) => {
+  // User routes
+  app.post("/api/users", async (req, res) => {
     try {
-      const documents = await storage.getAllDocuments();
-      res.json(documents);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to retrieve documents" });
+      const userData = insertUserSchema.parse(req.body);
+      
+      // Check if username already exists
+      const existingUser = await storage.getUserByUsername(userData.username);
+      if (existingUser) {
+        return res.status(409).json({ message: "Username already taken" });
+      }
+      
+      const user = await storage.createUser(userData);
+      
+      // Don't return the password
+      const { password, ...userWithoutPassword } = user;
+      res.status(201).json(userWithoutPassword);
+    } catch (err) {
+      handleZodError(err, res);
     }
   });
 
-  // Get a single document by ID
-  app.get(`${api}/documents/:id`, async (req, res) => {
+  app.get("/api/users/:id", async (req, res) => {
+    const id = parseInt(req.params.id);
+    
+    if (isNaN(id)) {
+      return res.status(400).json({ message: "Invalid user ID" });
+    }
+    
+    const user = await storage.getUser(id);
+    
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    
+    // Don't return the password
+    const { password, ...userWithoutPassword } = user;
+    res.json(userWithoutPassword);
+  });
+
+  // Category routes
+  app.get("/api/users/:userId/categories", async (req, res) => {
+    const userId = parseInt(req.params.userId);
+    
+    if (isNaN(userId)) {
+      return res.status(400).json({ message: "Invalid user ID" });
+    }
+    
+    const categories = await storage.getCategories(userId);
+    res.json(categories);
+  });
+
+  app.post("/api/categories", async (req, res) => {
+    try {
+      const categoryData = insertCategorySchema.parse(req.body);
+      const category = await storage.createCategory(categoryData);
+      res.status(201).json(category);
+    } catch (err) {
+      handleZodError(err, res);
+    }
+  });
+
+  // Document routes
+  app.get("/api/users/:userId/documents", async (req, res) => {
+    const userId = parseInt(req.params.userId);
+    const categoryId = req.query.categoryId ? parseInt(req.query.categoryId as string) : undefined;
+    
+    if (isNaN(userId)) {
+      return res.status(400).json({ message: "Invalid user ID" });
+    }
+    
+    let documents;
+    if (categoryId && !isNaN(categoryId)) {
+      documents = await storage.getDocumentsByCategory(userId, categoryId);
+    } else {
+      documents = await storage.getDocuments(userId);
+    }
+    
+    res.json(documents);
+  });
+
+  app.get("/api/documents/:id", async (req, res) => {
+    const id = parseInt(req.params.id);
+    
+    if (isNaN(id)) {
+      return res.status(400).json({ message: "Invalid document ID" });
+    }
+    
+    const document = await storage.getDocumentById(id);
+    
+    if (!document) {
+      return res.status(404).json({ message: "Document not found" });
+    }
+    
+    res.json(document);
+  });
+
+  app.post("/api/documents", async (req, res) => {
+    try {
+      // Parse the document data with date conversion
+      const documentData = {
+        ...req.body,
+        date: new Date(req.body.date)
+      };
+      
+      const validatedData = insertDocumentSchema.parse(documentData);
+      const document = await storage.createDocument(validatedData);
+      res.status(201).json(document);
+    } catch (err) {
+      handleZodError(err, res);
+    }
+  });
+
+  app.put("/api/documents/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      
       if (isNaN(id)) {
         return res.status(400).json({ message: "Invalid document ID" });
       }
       
-      const document = await storage.getDocument(id);
+      // Convert date string to Date object if present
+      const updateData = req.body;
+      if (updateData.date) {
+        updateData.date = new Date(updateData.date);
+      }
+      
+      const document = await storage.updateDocument(id, updateData);
+      
       if (!document) {
         return res.status(404).json({ message: "Document not found" });
       }
       
       res.json(document);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to retrieve document" });
+    } catch (err) {
+      handleZodError(err, res);
     }
   });
 
-  // Create a new document
-  app.post(`${api}/documents`, async (req, res) => {
-    try {
-      const validatedData = insertDocumentSchema.parse({
-        ...req.body,
-        createdAt: new Date().toISOString()
+  app.delete("/api/documents/:id", async (req, res) => {
+    const id = parseInt(req.params.id);
+    
+    if (isNaN(id)) {
+      return res.status(400).json({ message: "Invalid document ID" });
+    }
+    
+    const success = await storage.deleteDocument(id);
+    
+    if (!success) {
+      return res.status(404).json({ message: "Document not found" });
+    }
+    
+    res.status(204).end();
+  });
+
+  // QR Code routes
+  app.get("/api/users/:userId/qrcode", async (req, res) => {
+    const userId = parseInt(req.params.userId);
+    
+    if (isNaN(userId)) {
+      return res.status(400).json({ message: "Invalid user ID" });
+    }
+    
+    let qrCode = await storage.getQrCodeByUserId(userId);
+    
+    // If no QR code exists, create one
+    if (!qrCode) {
+      const token = randomBytes(16).toString('hex');
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 30); // Expires in 30 days
+      
+      qrCode = await storage.createQrCode({
+        userId,
+        token,
+        expiresAt
       });
-      
-      const newDocument = await storage.createDocument(validatedData);
-      res.status(201).json(newDocument);
-    } catch (error) {
-      if (error instanceof ZodError) {
-        const validationError = fromZodError(error);
-        return res.status(400).json({ message: validationError.message });
-      }
-      res.status(500).json({ message: "Failed to create document" });
     }
+    
+    res.json(qrCode);
   });
 
-  // Update a document
-  app.patch(`${api}/documents/:id`, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) {
-        return res.status(400).json({ message: "Invalid document ID" });
-      }
-      
-      const existingDocument = await storage.getDocument(id);
-      if (!existingDocument) {
-        return res.status(404).json({ message: "Document not found" });
-      }
-      
-      // Validate partial update data
-      const validatedData = insertDocumentSchema.partial().parse(req.body);
-      
-      const updatedDocument = await storage.updateDocument(id, validatedData);
-      res.json(updatedDocument);
-    } catch (error) {
-      if (error instanceof ZodError) {
-        const validationError = fromZodError(error);
-        return res.status(400).json({ message: validationError.message });
-      }
-      res.status(500).json({ message: "Failed to update document" });
+  app.get("/api/qrcode/:token", async (req, res) => {
+    const { token } = req.params;
+    
+    const qrCode = await storage.getQrCodeByToken(token);
+    
+    if (!qrCode) {
+      return res.status(404).json({ message: "QR code not found" });
     }
-  });
-
-  // Delete a document
-  app.delete(`${api}/documents/:id`, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) {
-        return res.status(400).json({ message: "Invalid document ID" });
-      }
-      
-      const success = await storage.deleteDocument(id);
-      if (!success) {
-        return res.status(404).json({ message: "Document not found" });
-      }
-      
-      res.status(204).end();
-    } catch (error) {
-      res.status(500).json({ message: "Failed to delete document" });
+    
+    // Check if QR code is expired
+    if (qrCode.expiresAt && new Date() > new Date(qrCode.expiresAt)) {
+      return res.status(410).json({ message: "QR code expired" });
     }
-  });
-
-  // Filter documents
-  app.get(`${api}/documents/filter`, async (req, res) => {
-    try {
-      const { category, date, search } = req.query;
-      
-      // Validate filter params
-      const validatedFilters = filterSchema.parse({
-        category: category || "",
-        date: date || "",
-        search: search || ""
-      });
-      
-      const filteredDocuments = await storage.filterDocuments({
-        category: validatedFilters.category,
-        dateFilter: validatedFilters.date,
-        searchTerm: validatedFilters.search
-      });
-      
-      res.json(filteredDocuments);
-    } catch (error) {
-      if (error instanceof ZodError) {
-        const validationError = fromZodError(error);
-        return res.status(400).json({ message: validationError.message });
-      }
-      res.status(500).json({ message: "Failed to filter documents" });
+    
+    // Get user details
+    const user = await storage.getUser(qrCode.userId);
+    
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
     }
-  });
-
-  // Generate QR code for all documents
-  app.get(`${api}/qrcode`, async (req, res) => {
-    try {
-      // In a real application, this would be tied to a user ID
-      // For this app, we'll generate a QR code with a data URL that points to the frontend
-      const baseUrl = process.env.BASE_URL || `http://${req.headers.host}`;
-      const qrData = `${baseUrl}/view-documents`;
-      
-      // Generate QR code
-      const qrCode = await QRCode.toDataURL(qrData);
-      
-      res.json({ qrCode });
-    } catch (error) {
-      res.status(500).json({ message: "Failed to generate QR code" });
-    }
+    
+    // Get user's documents
+    const documents = await storage.getDocuments(user.id);
+    
+    // Don't return the password
+    const { password, ...userWithoutPassword } = user;
+    
+    res.json({
+      user: userWithoutPassword,
+      documents
+    });
   });
 
   const httpServer = createServer(app);
