@@ -29,38 +29,38 @@ const DocumentFilters: React.FC<DocumentFiltersProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(initialCategory || '');
   const [sortOrder, setSortOrder] = useState('newest');
-  
+
   // Fetch categories from the API
   const { data: categories } = useQuery({
     queryKey: ['/api/users/1/categories'],
   });
-  
+
   // Handle search input changes
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setSearchTerm(value);
     onSearchChange(value);
   };
-  
+
   // Handle category selection
   const handleCategoryChange = (value: string) => {
     setSelectedCategory(value);
     onCategoryChange(value);
   };
-  
+
   // Handle sort order change
   const handleSortChange = (value: string) => {
     setSortOrder(value);
     onSortChange(value);
   };
-  
+
   // Set initial category if provided
   useEffect(() => {
     if (initialCategory && initialCategory !== selectedCategory) {
       setSelectedCategory(initialCategory);
     }
   }, [initialCategory]);
-  
+
   return (
     <div className="bg-white rounded-lg shadow p-4 mb-6">
       <div className="flex flex-col md:flex-row gap-4">
@@ -79,7 +79,7 @@ const DocumentFilters: React.FC<DocumentFiltersProps> = ({
             />
           </div>
         </div>
-        
+
         <div className="flex flex-col sm:flex-row gap-3">
           {/* Category filter */}
           <Select 
@@ -98,7 +98,7 @@ const DocumentFilters: React.FC<DocumentFiltersProps> = ({
               ))}
             </SelectContent>
           </Select>
-          
+
           {/* Date filter */}
           <Select 
             value={sortOrder} 
