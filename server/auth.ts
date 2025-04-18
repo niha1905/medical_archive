@@ -23,10 +23,28 @@ async function hashPassword(password: string) {
 }
 
 async function comparePasswords(supplied: string, stored: string) {
+  // Check if stored password is valid
+  if (!stored || !stored.includes(".")) {
+    console.error("Invalid stored password format");
+    return false;
+  }
+  
   const [hashed, salt] = stored.split(".");
-  const hashedBuf = Buffer.from(hashed, "hex");
-  const suppliedBuf = (await scryptAsync(supplied, salt, 64)) as Buffer;
-  return timingSafeEqual(hashedBuf, suppliedBuf);
+  
+  // Additional validation
+  if (!hashed || !salt) {
+    console.error("Invalid password hash or salt");
+    return false;
+  }
+  
+  try {
+    const hashedBuf = Buffer.from(hashed, "hex");
+    const suppliedBuf = (await scryptAsync(supplied, salt, 64)) as Buffer;
+    return timingSafeEqual(hashedBuf, suppliedBuf);
+  } catch (error) {
+    console.error("Error comparing passwords:", error);
+    return false;
+  }
 }
 
 export function setupAuth(app: Express) {
@@ -51,17 +69,33 @@ export function setupAuth(app: Express) {
 
   passport.use(
     new LocalStrategy(async (username, password, done) => {
-      const user = await storage.getUserByUsername(username);
-      if (!user) {
-        return done(null, false, { message: "Incorrect username" });
+      try {
+        // Validate input
+        if (!username || !password) {
+          return done(null, false, { message: "Username and password are required" });
+        }
+        
+        const user = await storage.getUserByUsername(username);
+        if (!user) {
+          return done(null, false, { message: "Incorrect username" });
+        }
+        
+        // Make sure password exists
+        if (!user.password) {
+          console.error(`User ${username} has no password set`);
+          return done(null, false, { message: "Authentication failed" });
+        }
+        
+        const passwordsMatch = await comparePasswords(password, user.password);
+        if (!passwordsMatch) {
+          return done(null, false, { message: "Incorrect password" });
+        }
+        
+        return done(null, user);
+      } catch (error) {
+        console.error("Authentication error:", error);
+        return done(error);
       }
-      
-      const passwordsMatch = await comparePasswords(password, user.password);
-      if (!passwordsMatch) {
-        return done(null, false, { message: "Incorrect password" });
-      }
-      
-      return done(null, user);
     }),
   );
 

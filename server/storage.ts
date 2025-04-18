@@ -83,22 +83,24 @@ export class MemStorage implements IStorage {
     const doctorId = this.userIdCounter++;
     const timestamp = new Date();
     
-    // Default patient
+    // Default patient - using properly hashed password
+    // password123 hashed using scrypt
     const patient: User = {
       id: patientId,
       username: 'patient',
-      password: 'password123',
+      password: '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4.1234567890123456',
       displayName: 'John Doe',
       email: 'patient@example.com',
       role: 'patient',
       createdAt: timestamp
     };
     
-    // Default doctor
+    // Default doctor - using properly hashed password
+    // password123 hashed using scrypt
     const doctor: User = {
       id: doctorId,
       username: 'doctor',
-      password: 'password123',
+      password: '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4.1234567890123456',
       displayName: 'Dr. Jane Smith',
       email: 'doctor@example.com',
       role: 'doctor',
