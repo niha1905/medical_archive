@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { MedicalCondition } from "@shared/schema";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
@@ -23,10 +23,14 @@ export function MedicalConditionSummary({ userId }: { userId: number }) {
   const { data: condition, isLoading, error } = useQuery<MedicalCondition>({
     queryKey: [`/api/users/${userId}/medical-condition`],
     queryFn: getQueryFn({ on401: "throw" }),
-    onSuccess: (data) => {
-      setSummaryText(data.summary);
-    },
   });
+
+  // Set summary text when data is loaded
+  useEffect(() => {
+    if (condition && condition.summary) {
+      setSummaryText(condition.summary);
+    }
+  }, [condition]);
   
   const updateMutation = useMutation({
     mutationFn: async (summary: string) => {
