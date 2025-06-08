@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "Medical Archive",
+    "slug": "medical-archive",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#4a90e2"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.medicalarchive.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#4a90e2"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.medicalarchive.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "description": "A secure application for storing and sharing medical documents"
+  }
+}

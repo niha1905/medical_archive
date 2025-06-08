@@ -119,9 +119,12 @@ export class MemStorage implements IStorage {
       { name: 'Vaccinations', userId: patientId }
     ];
     
-    // Add categories directly to the map
-    defaultCategories.forEach((cat, index) => {
+    // Add categories and track their IDs
+    const categoryIds: Record<string, number> = {};
+    defaultCategories.forEach((cat) => {
       const categoryId = this.categoryIdCounter++;
+      categoryIds[cat.name] = categoryId;
+      
       const category: Category = {
         id: categoryId,
         name: cat.name,
@@ -131,7 +134,7 @@ export class MemStorage implements IStorage {
       this.categories.set(categoryId, category);
     });
     
-    // Create default medical condition directly
+    // Create default medical condition
     const medicalConditionId = this.medicalConditionIdCounter++;
     const medicalCondition: MedicalCondition = {
       id: medicalConditionId,
@@ -140,6 +143,105 @@ export class MemStorage implements IStorage {
       lastUpdated: timestamp
     };
     this.medicalConditions.set(medicalConditionId, medicalCondition);
+    
+    // Create default QR code for the patient
+    const qrCodeId = this.qrCodeIdCounter++;
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30); // Expires in 30 days
+    
+    const qrCode: QrCode = {
+      id: qrCodeId,
+      userId: patientId,
+      token: "patient-qr-code",
+      expiresAt: expiresAt,
+      documentId: null,
+      createdAt: timestamp
+    };
+    this.qrCodes.set(qrCodeId, qrCode);
+    
+    // Create sample documents for the patient
+    const sampleDocuments = [
+      {
+        title: "Complete Blood Count",
+        categoryId: categoryIds["Lab Reports"],
+        userId: patientId,
+        date: new Date(2023, 10, 15),
+        notes: "Normal blood count results. All values within expected ranges.",
+        fileData: {
+          data: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+          name: "cbc_results.png",
+          type: "image/png"
+        }
+      },
+      {
+        title: "Lipid Panel",
+        categoryId: categoryIds["Lab Reports"],
+        userId: patientId,
+        date: new Date(2023, 9, 5),
+        notes: "Cholesterol slightly elevated. Recommended dietary changes.",
+        fileData: {
+          data: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+          name: "lipid_panel.png",
+          type: "image/png"
+        }
+      },
+      {
+        title: "Blood Pressure Medication",
+        categoryId: categoryIds["Prescriptions"],
+        userId: patientId,
+        date: new Date(2023, 11, 1),
+        notes: "Lisinopril 10mg, once daily. Refills: 3",
+        fileData: {
+          data: "data:application/pdf;base64,JVBERi0xLjcKJeLjz9MKNSAwIG9iago8PC9GaWx0ZXIvRmxhdGVEZWNvZGUvTGVuZ3RoIDM4Pj5zdHJlYW0KeJwr5HIK4TI2UzC2NFUwMFMISeFyDeEK5OICADlXBSgKZW5kc3RyZWFtCmVuZG9iago0IDAgb2JqCjw8L0NvbnRlbnRzIDUgMCBSL01lZGlhQm94WzAgMCA1OTUgODQyXS9QYXJlbnQgMiAwIFIvUmVzb3VyY2VzPDwvRm9udDw8L0YxIDYgMCBSPj4+Pi9UcmltQm94WzAgMCA1OTUgODQyXS9UeXBlL1BhZ2U+PgplbmRvYmoKMSAwIG9iago8PC9QYWdlcyAyIDAgUi9UeXBlL0NhdGFsb2c+PgplbmRvYmoKMyAwIG9iago8PC9BdXRob3IoVXNlcikgL0NyZWF0b3Io/v8ATQBpAGMAcgBvAHMAbwBmAHQArgAgAFcAbwByAGQAIABmAG8AcgAgAE0AaQBjAHIAbwBzAG8AZgB0ACAAMwA2ADUAKSAvQ3JlYXRpb25EYXRlKEQ6MjAyMzA0MTcxNTM4MjUrMDInMDAnKSAvTW9kRGF0ZShEOjIwMjMwNDE3MTUzODI1KzAyJzAwJykgL1Byb2R1Y2VyKP7/AE0AaQBjAHIAbwBzAG8AZgB0AK4AIABXAG8AcgBkACAAZgBvAHIAIABNAGkAYwByAG8AcwBvAGYAdAAgADMANgA1ACk+PgplbmRvYmoKNiAwIG9iago8PC9CYXNlRm9udC9IZWx2ZXRpY2EvRW5jb2RpbmcvV2luQW5zaUVuY29kaW5nL1N1YnR5cGUvVHlwZTEvVHlwZS9Gb250Pj4KZW5kb2JqCjIgMCBvYmoKPDwvQ291bnQgMS9LaWRzWzQgMCBSXS9UeXBlL1BhZ2VzPj4KZW5kb2JqCnhyZWYKMCA3CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDIyMiAwMDAwMCBuIAowMDAwMDAwNjI4IDAwMDAwIG4gCjAwMDAwMDAyNjcgMDAwMDAgbiAKMDAwMDAwMDExOSAwMDAwMCBuIAowMDAwMDAwMDE1IDAwMDAwIG4gCjAwMDAwMDA1MzMgMDAwMDAgbiAKdHJhaWxlcgo8PC9JbmZvIDMgMCBSL1Jvb3QgMSAwIFIvU2l6ZSA3Pj4Kc3RhcnR4cmVmCjY3OQolJUVPRgo=",
+          name: "bp_prescription.pdf",
+          type: "application/pdf"
+        }
+      },
+      {
+        title: "Chest X-Ray",
+        categoryId: categoryIds["X-Rays"],
+        userId: patientId,
+        date: new Date(2023, 8, 20),
+        notes: "No abnormalities detected. Lungs clear.",
+        fileData: {
+          data: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+          name: "chest_xray.png",
+          type: "image/png"
+        }
+      },
+      {
+        title: "COVID-19 Vaccination",
+        categoryId: categoryIds["Vaccinations"],
+        userId: patientId,
+        date: new Date(2023, 5, 10),
+        notes: "Pfizer-BioNTech COVID-19 Vaccine, 2nd dose",
+        fileData: {
+          data: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+          name: "covid_vaccination.png",
+          type: "image/png"
+        }
+      }
+    ];
+    
+    // Add sample documents
+    sampleDocuments.forEach(doc => {
+      const docId = this.documentIdCounter++;
+      const document: Document = {
+        ...doc,
+        id: docId,
+        createdAt: timestamp
+      };
+      this.documents.set(docId, document);
+      
+      // Update category count
+      const category = this.categories.get(doc.categoryId);
+      if (category) {
+        category.count++;
+        this.categories.set(doc.categoryId, category);
+      }
+    });
+
+
   }
   
   // User operations
@@ -245,7 +347,10 @@ export class MemStorage implements IStorage {
     const newDocument: Document = {
       ...document,
       id,
-      createdAt: timestamp
+      createdAt: timestamp,
+      date: typeof document.date === 'string' ? new Date(document.date) : document.date,
+      fileData: document.fileData ?? null, // Ensure fileData is explicitly set
+      notes: document.notes ?? null       // Ensure notes is explicitly set
     };
     
     this.documents.set(id, newDocument);
@@ -312,7 +417,9 @@ export class MemStorage implements IStorage {
       ...qrCode,
       id,
       token,
-      createdAt: timestamp
+      createdAt: timestamp,
+      expiresAt: qrCode.expiresAt ?? null,
+      documentId: qrCode.documentId ?? null // Ensure documentId is explicitly set to null if undefined
     };
     
     this.qrCodes.set(id, newQrCode);

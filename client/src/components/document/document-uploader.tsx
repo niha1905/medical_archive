@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
-import { Plus } from 'lucide-react';
+import { Upload, Plus } from 'lucide-react';
 import UploadModal from '@/components/modals/upload-modal';
 import { apiRequest } from '@/lib/queryClient';
 
@@ -40,7 +40,7 @@ const DocumentUploader: React.FC<DocumentUploaderProps> = ({ userId }) => {
     }
   });
 
-  const handleFileUpload = (documentData: any) => {
+  const handleUpload = (documentData: any) => {
     uploadMutation.mutate({
       ...documentData,
       userId
@@ -50,17 +50,17 @@ const DocumentUploader: React.FC<DocumentUploaderProps> = ({ userId }) => {
   return (
     <>
       <Button 
-        className="flex items-center"
+        className="flex items-center bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-md"
         onClick={() => setIsModalOpen(true)}
       >
-        <Plus className="mr-2 h-4 w-4" />
-        <span>Add Document</span>
+        <Upload className="mr-2 h-4 w-4" />
+        <span>Upload Document</span>
       </Button>
       
       <UploadModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        onUpload={handleFileUpload}
+        onUpload={handleUpload}
         isUploading={uploadMutation.isPending}
         userId={userId}
       />

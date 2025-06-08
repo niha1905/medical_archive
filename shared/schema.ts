@@ -43,9 +43,14 @@ export const documents = pgTable("documents", {
   createdAt: timestamp("created_at").defaultNow().notNull()
 });
 
-export const insertDocumentSchema = createInsertSchema(documents).omit({
-  id: true,
-  createdAt: true
+// Create a more flexible document schema for insertion
+export const insertDocumentSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  categoryId: z.number().int().positive("Category ID must be a positive integer"),
+  userId: z.number().int().positive("User ID must be a positive integer"),
+  fileData: z.any(), // Allow any file data structure
+  date: z.string().or(z.date()), // Allow string or Date object
+  notes: z.string().nullish(), // Allow both undefined and null
 });
 
 // QR Code schema
@@ -54,13 +59,19 @@ export const qrCodes = pgTable("qr_codes", {
   userId: integer("user_id").notNull(),
   token: text("token").notNull().unique(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-  expiresAt: timestamp("expires_at")
+  expiresAt: timestamp("expires_at"),
+  documentId: integer("document_id") // Optional field for document sharing
 });
 
-export const insertQrCodeSchema = createInsertSchema(qrCodes).omit({
-  id: true,
-  createdAt: true
-});
+export const insertQrCodeSchema = createInsertSchema(qrCodes)
+  .omit({
+    id: true,
+    createdAt: true
+  })
+  .extend({
+    // Make documentId optional
+    documentId: z.number().int().positive().optional().nullable()
+  });
 
 // Medical conditions schema
 export const medicalConditions = pgTable("medical_conditions", {
@@ -100,8 +111,38 @@ export const documentWithCategorySchema = z.object({
   userId: z.number(),
   fileData: z.any(),
   date: z.date(),
-  notes: z.string().optional(),
+  notes: z.string().nullish(), // Allow both undefined and null
   createdAt: z.date()
 });
 
 export type DocumentWithCategory = z.infer<typeof documentWithCategorySchema>;
+
+// Define a schema for file data structure
+export const fileDataSchema = z.object({
+  name: z.string(),
+  type: z.string(),
+  size: z.number(),
+  data: z.string() // Base64 encoded data
+});
+
+export type FileData = z.infer<typeof fileDataSchema>;
+
+// Document categories and file types for frontend use
+export const DOCUMENT_CATEGORIES = [
+  'lab_reports',
+  'prescriptions',
+  'x_rays',
+  'vaccinations',
+  'medical_history',
+  'insurance',
+  'other'
+];
+
+export const FILE_TYPES = [
+  'pdf',
+  'jpg',
+  'jpeg',
+  'png',
+  'doc',
+  'docx'
+];
